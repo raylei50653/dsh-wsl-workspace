@@ -309,6 +309,12 @@ async function open(client) {
   await client.click('.dww-action')
 }
 
+/** Open the dialog, then the account popover behind the header pill. */
+async function openAuth(client) {
+  await open(client)
+  await client.click('.dww-auth-chip')
+}
+
 test('a healthy install opens the dialog and draws no error row at all', { timeout: 10_000 }, async () => {
   // #99: the row rendered on every healthy open because `undefined !== null`. The assertion is on
   // absence *and* on the surrounding state, so a component that fails to open cannot pass it.
@@ -468,31 +474,34 @@ test('the help panel opens over the form and closing it restores the same messag
   } finally { await client.unmount() }
 })
 
-test('account controls are below username and only turn green after a fresh check', async () => {
+test('opening the dialog checks the account once and the header pill turns green only on success', async () => {
   let release
   const pending = new Promise(resolve => { release = resolve })
   const client = mount(healthy({ headlessAuthCheck: pending }))
   try {
     await open(client)
+    const chip = client.container.querySelector('.dww-header .dww-auth-chip')
+    assert.ok(chip !== null, 'the account pill must sit in the dialog header, visible without opening help')
+    assert.equal(client.calls.filter(name => name === 'headlessAuthCheck').length, 1, 'opening the dialog sends exactly one account check')
+    assert.equal(chip.dataset.state, 'checking', 'the pill shows progress, not green, while the check is in flight')
+    assert.equal(client.container.querySelector('.dww-signin-notice'), null, 'settings stay folded until the pill is pressed')
+    await client.click('.dww-auth-chip')
+    assert.equal(chip.getAttribute('aria-expanded'), 'true')
     const notice = client.container.querySelector('.dww-signin-notice')
-    assert.ok(notice !== null, 'account controls must be visible without opening help')
-    assert.equal(client.container.querySelector('#dww-username').closest('.dww-field').nextElementSibling, notice,
-      'the account controls must be next to username')
+    assert.ok(notice !== null, 'pressing the pill opens the account settings')
     const status = notice.querySelector('.dww-auth-status')
-    assert.equal(status.dataset.state, 'idle')
-    assert.match(status.textContent, /尚未检查/)
-    assert.equal(notice.querySelector('.dww-auth-apply').disabled, true)
-    assert.ok(!client.calls.includes('headlessAuthCheck'), 'opening the dialog must not send an account request')
-    await client.click('.dww-auth-check')
     assert.equal(status.dataset.state, 'checking')
     assert.equal(notice.querySelector('.dww-auth-check').disabled, true)
+    assert.equal(notice.querySelector('.dww-auth-apply').disabled, true)
     await client.act(async () => {
       release({ ok: true, status: 200, json: async () => ({ ok: true, value: { status: 'connected' } }) })
       await flush()
     })
     assert.equal(status.dataset.state, 'connected')
     assert.match(status.textContent, /账号连接正常/)
+    assert.equal(chip.dataset.state, 'connected', 'the header pill turns green with the check')
     assert.equal(notice.querySelector('.dww-auth-apply').disabled, false)
+    assert.equal(client.calls.filter(name => name === 'headlessAuthCheck').length, 1, 'opening the popover must not send a second check')
     assert.ok(!client.calls.includes('configureHeadlessAuth'), 'checking connectivity must not save preferences')
   } finally { await client.unmount() }
 })
@@ -502,7 +511,7 @@ for (const answer of [{ status: 'failed' }, { status: 'signed-out' }, { status: 
     const scenario = healthy({ headlessAuthCheck: answer })
     const client = mount(scenario)
     try {
-      await open(client)
+      await openAuth(client)
       await client.click('.dww-auth-check')
       const status = client.container.querySelector('.dww-auth-status')
       assert.notEqual(status.dataset.state, 'connected')
@@ -531,7 +540,7 @@ test('one-launch setup downloads the returned overlay and does not claim it was 
     return { scope, yaml, filename: 'headless-account.patch.yml', permanent: false, managed: false, canReset: false }
   } }))
   try {
-    await open(client)
+    await openAuth(client)
     await client.click('.dww-auth-check')
     await client.click('.dww-auth-apply')
     assert.equal(requestedScope, 'once')
@@ -554,7 +563,7 @@ test('remember settings saves explicitly and can restore the previous configurat
     return { scope, permanent: scope === 'permanent', managed: scope === 'permanent', canReset: scope === 'permanent' }
   } }))
   try {
-    await open(client)
+    await openAuth(client)
     await client.click('.dww-auth-check')
     await client.click('input[value="permanent"]')
     await client.click('.dww-auth-apply')
@@ -572,7 +581,7 @@ test('conflicting or malformed settings results are not presented as saved', asy
   const scenario = healthy({ configureHeadlessAuth: { failureCode: 'CONFIG_CONFLICT' } })
   const client = mount(scenario)
   try {
-    await open(client)
+    await openAuth(client)
     await client.click('.dww-auth-check')
     await client.click('input[value="permanent"]')
     await client.click('.dww-auth-apply')

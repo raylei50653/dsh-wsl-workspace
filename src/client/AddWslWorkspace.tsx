@@ -359,6 +359,7 @@ export function AddWslWorkspace({ wide, t, describe, checkPreset, listDistros, l
       <div className="dww-card" role="dialog" aria-modal="true" aria-label={t('dialog.title')}>
         <div className="dww-header">
           <h2 className="dww-title">{t('dialog.title')}</h2>
+          <HeadlessSignIn t={t} />
           <button
             type="button"
             className="dww-help-btn"
@@ -427,7 +428,6 @@ export function AddWslWorkspace({ wide, t, describe, checkPreset, listDistros, l
               onChange={event => setUsername(event.target.value)}
             />
           </div>
-          <HeadlessSignIn t={t} />
           <div className="dww-feedback">
             <div className="dww-breadcrumb">{browsePath}</div>
             <div className="dww-dirlist" onScroll={listScroll}>

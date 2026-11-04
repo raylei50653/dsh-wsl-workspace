@@ -175,6 +175,8 @@ const STYLES = `
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
 }
+/* flex: 1 is for the path row; directly in the column-flex field it overrode the height. */
+.dww-field > .dww-input { flex: none; }
 .dww-input:focus, .dww-select:focus {
   outline: none;
   border-color: var(--dsw-alias-state-business-primary);
@@ -364,36 +366,77 @@ const STYLES = `
   color: var(--dsw-alias-label-secondary);
 }
 .dww-help-list--known { color: var(--dsw-alias-label-primary); }
-.dww-signin-notice {
+/* Headless sign-in: a status pill beside the title, settings in a popover under the header. */
+.dww-header { position: relative; }
+.dww-auth { flex: none; display: flex; }
+.dww-auth-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
   border: 1px solid var(--dsw-alias-border-l2);
-  border-left: 3px solid var(--dsw-alias-state-business-primary);
-  border-radius: 8px;
-  background: var(--dsw-alias-interactive-bg-hover);
-  padding: 12px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  cursor: pointer;
 }
-.dww-signin-title {
-  margin: 0 0 6px;
-  font-size: 13px;
-  line-height: 1.5;
-  font-weight: 600;
-  color: var(--dsw-alias-label-primary);
+.dww-auth-chip:hover, .dww-auth-chip[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dww-auth-caret { font-size: 10px; opacity: 0.7; }
+.dww-auth-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--dsw-alias-label-tertiary); }
+[data-state='checking'] > .dww-auth-dot { background: var(--dsw-alias-state-warn-primary); }
+[data-state='connected'] > .dww-auth-dot { background: var(--dsw-alias-state-success-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-success-primary) 25%, transparent); }
+[data-state='failed'] > .dww-auth-dot,
+[data-state='signed-out'] > .dww-auth-dot,
+[data-state='unavailable'] > .dww-auth-dot { background: var(--dsw-alias-state-error-primary); }
+.dww-signin-notice {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% - 4px);
+  left: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
-.dww-signin-lead { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
-.dww-auth-check-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.dww-auth-status { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-tertiary); }
-.dww-auth-status[data-state='connected'] { color: var(--dsw-alias-state-success-primary); }
-.dww-auth-status[data-state='checking'] { color: var(--dsw-alias-state-warn-primary); }
-.dww-auth-status[data-state='failed'], .dww-auth-status[data-state='signed-out'], .dww-auth-status[data-state='unavailable'] { color: var(--dsw-alias-state-error-primary); }
-.dww-auth-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
-.dww-auth-check { flex: none; height: 32px; padding: 0 10px; font-size: 12px; }
-.dww-auth-scope { border: 0; padding: 0; margin: 10px 0 8px; display: flex; flex-wrap: wrap; gap: 8px 16px; }
-.dww-auth-scope legend { padding: 0 0 6px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
-.dww-auth-scope label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--dsw-alias-label-primary); cursor: pointer; }
-.dww-auth-scope input { accent-color: var(--dsw-alias-state-business-primary); }
-.dww-auth-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 8px; }
-.dww-auth-apply { font-size: 12px; }
-.dww-auth-reset { font-size: 12px; }
-.dww-auth-feedback { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-primary); }
+.dww-auth-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dww-auth-title { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.dww-auth-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.dww-auth-status { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.dww-auth-status[data-state='connected'] { color: var(--dsw-alias-label-primary); }
+.dww-auth-check { height: 30px; }
+.dww-auth-scope { display: inline-flex; margin: 0; padding: 2px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
+.dww-auth-scope label {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.dww-auth-scope label:has(input:checked) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dww-auth-scope label:has(input:focus-visible) { outline: 1px solid var(--dsw-alias-state-business-primary); }
+.dww-auth-scope input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
+.dww-auth-scope:disabled label { cursor: default; opacity: 0.6; }
+.dww-auth-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+.dww-auth-apply { height: 30px; padding: 0 12px; font-size: 12px; }
+.dww-auth-reset { padding: 0; border: 0; background: transparent; font-size: 12px; color: var(--dsw-alias-label-tertiary); text-decoration: underline; cursor: pointer; }
+.dww-auth-reset:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
+.dww-auth-reset:disabled { cursor: default; opacity: 0.6; }
+.dww-auth-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }
+.dww-auth-feedback[data-tone='success'] { color: var(--dsw-alias-state-success-primary); }
+.dww-auth-feedback[data-tone='error'] { color: var(--dsw-alias-state-error-primary); }
+.dww-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .dww-help-footer {
   display: flex;
   gap: 14px;

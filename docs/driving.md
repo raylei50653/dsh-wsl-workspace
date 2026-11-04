@@ -81,27 +81,29 @@ process did not start — read stderr; a busy port is the usual cause, and any f
 
 The `headless` profile is a separate, one-task command-line mode; it does not load
 this plugin's HTTP route. Its default configuration ignores saved desktop sign-ins.
-The Add WSL workspace dialog provides account controls **below the username field**;
+The Add WSL workspace dialog shows an **Account** pill beside its title; the dot is grey
+until checked, green when connected, red on failure. Press it to open the account popover;
 the `?` help panel is unchanged.
 
 1. Sign in through the desktop, and use the **same Windows `DSH_HOME`** for headless.
    A scratch home or a WSL Linux home has a separate credential store.
-2. Press **Check account connection**. The plugin asks DSH's account service for a
+2. Opening the dialog checks once on its own; **Check** in the popover re-checks
+   (for example right after signing in). The plugin asks DSH's account service for a
    fresh authenticated balance request (`deepseekAccount.getBalance`), without
-   running a model task. The indicator starts unchecked, shows progress, and turns
+   running a model task. The indicator shows progress, and turns
    green only for a successful account-service response. A red result includes a
    sign-in, service, connection or timeout message. Green does not prove that a
    model inference request or a `subagent` call will succeed.
-3. Choose **For this launch** or **Remember settings**, then apply that choice:
-   - **Download launch settings** creates a credential-free `headless-account.patch.yml`
+3. Choose **This launch** or **Remember**, then apply that choice:
+   - **Download** creates a credential-free `headless-account.patch.yml`
      overlay. Load the
      downloaded file for that invocation with
      `dsh --profile headless --patch "<downloaded-overlay.yml>" -`. Existing defaults
      stay in place. The final `-` waits for task text on stdin; pipe a task into it.
-   - **Save default settings** updates the same home's
+   - **Save** updates the same home's
      `<DSH_HOME>/profiles/headless/cordis.patch.yml`, preserving unrelated rows and
      configuration. Later headless launches use the saved account settings.
-   - **Restore previous settings**, when offered, restores only fields this plugin
+   - **Restore**, when offered, restores only fields this plugin
      manages. Conflicting external edits are reported instead of overwritten;
      manually configured account defaults are not claimed by the plugin.
 
