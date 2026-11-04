@@ -43,6 +43,7 @@ import { PROBE_CONFIG, buildSessionSpec } from './host/wsl-bash-tool.ts'
 import { probeWslBashSession, type WslBashSpawnHost } from './host/wsl-bash-session.ts'
 import { hostLacksSubagentGate, isWslVariantId, transformPresetForWsl, unquoteScalar, variantIdFor } from './host/variants.ts'
 import { WslSkillsProvider, type WslSkillsRegistryFace } from './host/wsl-skills.ts'
+import { createHeadlessAuth, type HeadlessAccount } from './host/headless-auth.ts'
 
 /** The HTTP route this plugin serves (a relative, same-origin path). */
 export const DEFAULT_ROUTE = '/wsl-workspace/api'
@@ -387,6 +388,9 @@ const METHOD_TABLE: readonly MethodRow[] = [
   { name: 'listWorkspaceRecords', mutates: false, params: {}, returns: 'workspace records (path, distro, username)' },
   { name: 'setUser', mutates: true, params: { path: 'WSL UNC workspace', username: 'linux user, or "" to clear' }, returns: 'null' },
   { name: 'variantStatus', mutates: false, params: {}, returns: 'preset-variant registration outcome for this process' },
+  { name: 'headlessAuthStatus', mutates: false, params: {}, returns: 'saved headless account preference and restore availability' },
+  { name: 'headlessAuthCheck', mutates: false, params: {}, returns: 'fresh account-service connection result; never credentials or balance' },
+  { name: 'configureHeadlessAuth', mutates: true, params: { scope: 'once | permanent | reset' }, returns: 'updated preference; once includes a credential-free launch overlay' },
   { name: 'describe', mutates: false, params: {}, returns: 'this object' },
 ]
 
@@ -494,7 +498,7 @@ function describeSelf(route: string = servedRoute): {
 }
 
 /** Route one method dispatch. */
-async function dispatch(method: string, params: Record<string, unknown>): Promise<unknown> {
+async function dispatch(method: string, params: Record<string, unknown>, headlessAuth: ReturnType<typeof createHeadlessAuth>): Promise<unknown> {
   switch (method) {
     case 'listDistros': {
       const distros = await listDistros()
@@ -594,6 +598,17 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
       // second envelope for a caller to unwrap. A host without this case answers
       // `{ok:false}`, which the client already falls back from.
       return variantOutcome
+    }
+    case 'headlessAuthStatus': {
+      return headlessAuth.status()
+    }
+    case 'headlessAuthCheck': {
+      return headlessAuth.check()
+    }
+    case 'configureHeadlessAuth': {
+      const scope = params.scope
+      if (scope !== 'once' && scope !== 'permanent' && scope !== 'reset') throw new Error('scope must be once, permanent, or reset')
+      return headlessAuth.configure(scope)
     }
     default:
       throw new Error(`unknown method "${method}"`)
@@ -1202,6 +1217,19 @@ export function apply(ctx: Context, config: Config): void {
   // `describe` reports the route this process actually serves, not the default one.
   servedRoute = resolved.route
   const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+  const headlessAuth = createHeadlessAuth({
+    dshHome,
+    account: () => ctx.get('deepseekAccount') as HeadlessAccount | undefined,
+    selection: () => {
+      const defaults = ctx.get('agentDefaultModel') as { currentSelection?: () => { provider: string; model: string } } | undefined
+      return defaults?.currentSelection?.() ?? { provider: 'deepseek-account', model: 'deepseek-flash' }
+    },
+    client: {
+      version: hostFamilyVersion() ?? '0.0.0',
+      locale: 'en',
+      timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
+    },
+  })
   const packageRoot = fileURLToPath(new URL('..', import.meta.url))
   const shellPath = join(packageRoot, 'lib', 'shell.js').replace(/\\/g, '/')
   const fsPath = join(packageRoot, 'lib', 'fs.js').replace(/\\/g, '/')
@@ -1445,16 +1473,22 @@ export function apply(ctx: Context, config: Config): void {
         return
       }
       const method = typeof body.method === 'string' ? body.method : ''
+      if (['headlessAuthStatus', 'headlessAuthCheck', 'configureHeadlessAuth'].includes(method)
+        && String(req.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() !== 'application/json') {
+        json(res, 403, { ok: false, error: 'account settings require an application/json request' })
+        return
+      }
       const params = body.params === undefined ? {} : body.params
       if (params === null || typeof params !== 'object' || Array.isArray(params)) {
         json(res, 400, { ok: false, error: 'params must be an object' })
         return
       }
       try {
-        const value = await dispatch(method, params as Record<string, unknown>)
+        const value = await dispatch(method, params as Record<string, unknown>, headlessAuth)
         json(res, 200, { ok: true, value })
       } catch (error) {
-        json(res, 200, { ok: false, error: messageOf(error) })
+        const code = error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string' ? error.code : undefined
+        json(res, 200, { ok: false, error: messageOf(error), ...(code === undefined ? {} : { code }) })
       }
     },
   }), 'dsh-wsl-workspace: dialog data route')

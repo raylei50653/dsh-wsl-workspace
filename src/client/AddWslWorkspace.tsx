@@ -17,6 +17,7 @@ import { isAbsoluteLinuxPath, isValidWslUsername, normalizeLinuxPath } from '../
 import type { WslDirListing, WslPathCheck, WslSelfDescription } from './api.ts'
 import { mountHeaderEntry, mountWorkspaceMenuEntry } from './hostEntry.ts'
 import { WslHelp } from './help.tsx'
+import { HeadlessSignIn } from './HeadlessSignIn.tsx'
 
 /** Result-level shape of a browse/check/list call we surface uniformly. */
 interface ApiCall<T> {
@@ -426,6 +427,7 @@ export function AddWslWorkspace({ wide, t, describe, checkPreset, listDistros, l
               onChange={event => setUsername(event.target.value)}
             />
           </div>
+          <HeadlessSignIn t={t} />
           <div className="dww-feedback">
             <div className="dww-breadcrumb">{browsePath}</div>
             <div className="dww-dirlist" onScroll={listScroll}>

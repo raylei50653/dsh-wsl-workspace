@@ -146,6 +146,7 @@ if (YAML4 === null || YAML5 === null) {
  * says UNKNOWN instead of guessing.
  */
 function satisfies(range, version) {
+  if (range === version) return true
   const want = /^\^(\d+)\.(\d+)\.\d+$/.exec(range)
   if (want === null || version === null) return 'UNKNOWN'
   const [major, minor] = version.split('.').map(Number)
@@ -215,10 +216,11 @@ function buildArm(spec) {
   const copied = JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8'))
   for (const [name, range] of Object.entries(copied.dependencies ?? {})) {
     const forced = spec.nested === '5' && name === 'js-yaml' ? YAML5_DIR : null
-    const pick = forced ?? Object.values(COPIES).find(dir => satisfies(range, versionOf(dir)) === true)
+    const candidates = name === 'js-yaml' ? Object.values(COPIES) : [join(repoRoot, 'node_modules', ...name.split('/'))]
+    const pick = forced ?? candidates.find(dir => satisfies(range, versionOf(dir)) === true)
     if (pick === undefined) {
       console.error(`${NAME} NOT VERIFIED — the manifest declares ${name}@${range} and no local copy satisfies it`
-        + ` (4.x=${YAML4}, hostile=${YAML5})`)
+        + ` (${candidates.map(dir => `${dir}: ${versionOf(dir) ?? 'MISSING'}`).join(', ')})`)
       process.exit(1)
     }
     link(pick, join(pkgDir, 'node_modules', name))

@@ -104,6 +104,9 @@ function mount(scenario, { wide = true } = {}) {
     if (answer === 'refuse') {
       return { ok: true, status: 200, json: async () => ({ ok: false, error: `${method} refused by the host` }) }
     }
+    if (answer?.failureCode) {
+      return { ok: true, status: 200, json: async () => ({ ok: false, error: 'account settings refused', code: answer.failureCode }) }
+    }
     if (answer && answer.then !== undefined) return answer
     return { ok: true, status: 200, json: async () => ({ ok: true, value: answer ?? [] }) }
   }
@@ -294,6 +297,8 @@ function healthy(overrides = {}) {
     listDistros: ['Ubuntu-24.04'],
     listDir: { path: '/', parent: null, entries: [{ name: 'home', kind: 'directory' }] },
     describe: { version: '0.7.8', releases: [] },
+    headlessAuthStatus: { permanent: false, managed: false, canReset: false },
+    headlessAuthCheck: { status: 'connected' },
     ...overrides,
   }
 }
@@ -438,8 +443,8 @@ test('Escape closes an idle dialog and is ignored while a create is in flight', 
     assert.ok(client.container.querySelector('.dww-card') === null, 'Escape closes an idle dialog')
 
     await client.click('.dww-action')
-    await client.click('.dww-btn--primary')
-    assert.equal(client.container.querySelector('.dww-btn--primary').disabled, true, 'the create is in flight')
+    await client.click('.dww-actions .dww-btn--primary')
+    assert.equal(client.container.querySelector('.dww-actions .dww-btn--primary').disabled, true, 'the create is in flight')
     await client.escape()
     assert.ok(client.container.querySelector('.dww-card') !== null, 'Escape must not close a busy dialog')
     release({ ok: true, status: 200, json: async () => ({ ok: true, value: { exists: true, isDirectory: true } }) })
@@ -460,6 +465,122 @@ test('the help panel opens over the form and closing it restores the same messag
     await client.click('.dww-help-btn')
     assert.equal(client.container.querySelector('.dww-error')?.textContent ?? '', before,
       'closing the panel must return the same message, not a cleared one')
+  } finally { await client.unmount() }
+})
+
+test('account controls are below username and only turn green after a fresh check', async () => {
+  let release
+  const pending = new Promise(resolve => { release = resolve })
+  const client = mount(healthy({ headlessAuthCheck: pending }))
+  try {
+    await open(client)
+    const notice = client.container.querySelector('.dww-signin-notice')
+    assert.ok(notice !== null, 'account controls must be visible without opening help')
+    assert.equal(client.container.querySelector('#dww-username').closest('.dww-field').nextElementSibling, notice,
+      'the account controls must be next to username')
+    const status = notice.querySelector('.dww-auth-status')
+    assert.equal(status.dataset.state, 'idle')
+    assert.match(status.textContent, /尚未检查/)
+    assert.equal(notice.querySelector('.dww-auth-apply').disabled, true)
+    assert.ok(!client.calls.includes('headlessAuthCheck'), 'opening the dialog must not send an account request')
+    await client.click('.dww-auth-check')
+    assert.equal(status.dataset.state, 'checking')
+    assert.equal(notice.querySelector('.dww-auth-check').disabled, true)
+    await client.act(async () => {
+      release({ ok: true, status: 200, json: async () => ({ ok: true, value: { status: 'connected' } }) })
+      await flush()
+    })
+    assert.equal(status.dataset.state, 'connected')
+    assert.match(status.textContent, /账号连接正常/)
+    assert.equal(notice.querySelector('.dww-auth-apply').disabled, false)
+    assert.ok(!client.calls.includes('configureHeadlessAuth'), 'checking connectivity must not save preferences')
+  } finally { await client.unmount() }
+})
+
+for (const answer of [{ status: 'failed' }, { status: 'signed-out' }, { status: 'unavailable' }, { status: 'failed', reason: 'timeout' }, { status: 'unexpected' }]) {
+  test(`an account check reports ${JSON.stringify(answer)} without enabling setup`, async () => {
+    const scenario = healthy({ headlessAuthCheck: answer })
+    const client = mount(scenario)
+    try {
+      await open(client)
+      await client.click('.dww-auth-check')
+      const status = client.container.querySelector('.dww-auth-status')
+      assert.notEqual(status.dataset.state, 'connected')
+      assert.ok(status.textContent.trim() !== '' && !status.textContent.includes('auth.status.'), 'failure needs readable text as well as a color')
+      assert.equal(client.container.querySelector('.dww-auth-apply').disabled, true)
+      scenario.headlessAuthCheck = { status: 'connected' }
+      await client.click('.dww-auth-check')
+      assert.equal(status.dataset.state, 'connected', 'retry must run another check')
+    } finally { await client.unmount() }
+  })
+}
+
+test('one-launch setup downloads the returned overlay and does not claim it was saved', async () => {
+  let requestedScope
+  let downloadedBlob
+  let downloadedName
+  const originalCreate = URL.createObjectURL
+  const originalRevoke = URL.revokeObjectURL
+  const originalClick = dom.window.HTMLAnchorElement.prototype.click
+  URL.createObjectURL = blob => { downloadedBlob = blob; return 'blob:fixture' }
+  URL.revokeObjectURL = () => {}
+  dom.window.HTMLAnchorElement.prototype.click = function () { downloadedName = this.download }
+  const yaml = '- id: credentials\n  disabled: false\n'
+  const client = mount(healthy({ configureHeadlessAuth: ({ scope }) => {
+    requestedScope = scope
+    return { scope, yaml, filename: 'headless-account.patch.yml', permanent: false, managed: false, canReset: false }
+  } }))
+  try {
+    await open(client)
+    await client.click('.dww-auth-check')
+    await client.click('.dww-auth-apply')
+    assert.equal(requestedScope, 'once')
+    assert.equal(downloadedName, 'headless-account.patch.yml')
+    assert.equal(await downloadedBlob.text(), yaml)
+    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /已下载/)
+    assert.equal(client.container.querySelector('.dww-auth-reset'), null)
+  } finally {
+    await client.unmount()
+    URL.createObjectURL = originalCreate
+    URL.revokeObjectURL = originalRevoke
+    dom.window.HTMLAnchorElement.prototype.click = originalClick
+  }
+})
+
+test('remember settings saves explicitly and can restore the previous configuration', async () => {
+  const scopes = []
+  const client = mount(healthy({ configureHeadlessAuth: ({ scope }) => {
+    scopes.push(scope)
+    return { scope, permanent: scope === 'permanent', managed: scope === 'permanent', canReset: scope === 'permanent' }
+  } }))
+  try {
+    await open(client)
+    await client.click('.dww-auth-check')
+    await client.click('input[value="permanent"]')
+    await client.click('.dww-auth-apply')
+    assert.deepEqual(scopes, ['permanent'])
+    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /已保存/)
+    await client.click('.dww-auth-reset')
+    assert.deepEqual(scopes, ['permanent', 'reset'])
+    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /已还原/)
+    assert.equal(client.container.querySelector('input[value="once"]').checked, true)
+    assert.equal(client.container.querySelector('.dww-auth-reset'), null)
+  } finally { await client.unmount() }
+})
+
+test('conflicting or malformed settings results are not presented as saved', async () => {
+  const scenario = healthy({ configureHeadlessAuth: { failureCode: 'CONFIG_CONFLICT' } })
+  const client = mount(scenario)
+  try {
+    await open(client)
+    await client.click('.dww-auth-check')
+    await client.click('input[value="permanent"]')
+    await client.click('.dww-auth-apply')
+    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /其他程序修改/)
+    scenario.configureHeadlessAuth = {}
+    await client.click('.dww-auth-apply')
+    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /设置未完成/)
+    assert.equal(client.container.querySelector('.dww-auth-reset'), null)
   } finally { await client.unmount() }
 })
 

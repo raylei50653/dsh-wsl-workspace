@@ -364,6 +364,36 @@ const STYLES = `
   color: var(--dsw-alias-label-secondary);
 }
 .dww-help-list--known { color: var(--dsw-alias-label-primary); }
+.dww-signin-notice {
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-left: 3px solid var(--dsw-alias-state-business-primary);
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  padding: 12px;
+}
+.dww-signin-title {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary);
+}
+.dww-signin-lead { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-secondary); }
+.dww-auth-check-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.dww-auth-status { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-tertiary); }
+.dww-auth-status[data-state='connected'] { color: var(--dsw-alias-state-success-primary); }
+.dww-auth-status[data-state='checking'] { color: var(--dsw-alias-state-warn-primary); }
+.dww-auth-status[data-state='failed'], .dww-auth-status[data-state='signed-out'], .dww-auth-status[data-state='unavailable'] { color: var(--dsw-alias-state-error-primary); }
+.dww-auth-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.dww-auth-check { flex: none; height: 32px; padding: 0 10px; font-size: 12px; }
+.dww-auth-scope { border: 0; padding: 0; margin: 10px 0 8px; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.dww-auth-scope legend { padding: 0 0 6px; font-size: 12px; color: var(--dsw-alias-label-secondary); }
+.dww-auth-scope label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--dsw-alias-label-primary); cursor: pointer; }
+.dww-auth-scope input { accent-color: var(--dsw-alias-state-business-primary); }
+.dww-auth-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 8px; }
+.dww-auth-apply { font-size: 12px; }
+.dww-auth-reset { font-size: 12px; }
+.dww-auth-feedback { margin: 0 0 8px; font-size: 12px; line-height: 1.6; color: var(--dsw-alias-label-primary); }
 .dww-help-footer {
   display: flex;
   gap: 14px;

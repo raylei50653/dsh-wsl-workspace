@@ -30,7 +30,17 @@ export interface WslPathCheck {
 }
 
 /** Wire envelope the Host route answers with. */
-type Envelope<T> = { ok: true; value: T } | { ok: false; error: string }
+type Envelope<T> = { ok: true; value: T } | { ok: false; error: string; code?: string }
+
+/** A stable host error code lets the interface offer an appropriate next step. */
+export class WslApiError extends Error {
+  readonly code: string | undefined
+  constructor(message: string, code?: string) {
+    super(message)
+    this.name = 'WslApiError'
+    this.code = code
+  }
+}
 
 /** Human text for an unknown rejection, reusing the repository's idiom. */
 function errorMessage(value: unknown): string {
@@ -134,7 +144,7 @@ async function call<T>(method: string, params: Record<string, unknown> = {}): Pr
     // A non-JSON body on a 2xx means a proxy/loader answered instead of the Host route.
     throw new Error(`wsl-workspace answered non-JSON on 2xx (${response.status}) — ${ENDPOINT}`)
   }
-  if (!envelope.ok) throw new Error(refusalText(envelope.error, method))
+  if (!envelope.ok) throw new WslApiError(refusalText(envelope.error, method), envelope.code)
   if (!('value' in envelope)) throw new Error(`wsl-workspace ${method} answered ok without a value`)
   return envelope.value
 }
@@ -252,6 +262,58 @@ export interface WslSelfDescription {
  */
 export async function describe(): Promise<WslSelfDescription> {
   return call<WslSelfDescription>('describe', {})
+}
+
+/** Saved preferences are separate from the result of a network account check. */
+export interface HeadlessAuthState {
+  permanent: boolean
+  managed: boolean
+  canReset: boolean
+}
+
+export interface HeadlessAuthCheck {
+  status: 'connected' | 'signed-out' | 'unavailable' | 'failed'
+  reason?: string
+}
+
+export type HeadlessAuthScope = 'once' | 'permanent' | 'reset'
+
+export interface HeadlessAuthResult extends HeadlessAuthState {
+  scope: HeadlessAuthScope
+  yaml?: string
+  filename?: string
+}
+
+function authState(value: unknown): HeadlessAuthState {
+  if (value === null || typeof value !== 'object') throw new Error('invalid headless settings response')
+  const state = value as Partial<HeadlessAuthState>
+  if (typeof state.permanent !== 'boolean' || typeof state.managed !== 'boolean' || typeof state.canReset !== 'boolean') {
+    throw new Error('invalid headless settings response')
+  }
+  return state as HeadlessAuthState
+}
+
+export async function headlessAuthStatus(): Promise<HeadlessAuthState> {
+  return authState(await call<unknown>('headlessAuthStatus'))
+}
+
+export async function headlessAuthCheck(): Promise<HeadlessAuthCheck> {
+  const value = await call<unknown>('headlessAuthCheck')
+  if (value === null || typeof value !== 'object' || !('status' in value)
+    || !['connected', 'signed-out', 'unavailable', 'failed'].includes(String(value.status))) {
+    throw new Error('invalid account connection response')
+  }
+  return value as HeadlessAuthCheck
+}
+
+export async function configureHeadlessAuth(scope: HeadlessAuthScope): Promise<HeadlessAuthResult> {
+  const value = await call<unknown>('configureHeadlessAuth', { scope })
+  authState(value)
+  const result = value as HeadlessAuthResult
+  if (result.scope !== scope || (scope === 'once' && (typeof result.yaml !== 'string' || result.yaml.trim() === ''))) {
+    throw new Error('invalid account settings result')
+  }
+  return result
 }
 
 /** One variant this boot could not publish, with the cause the host recorded. */

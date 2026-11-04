@@ -77,6 +77,69 @@ The printed URL appears only once the server is listening. If no line appears, t
 process did not start — read stderr; a busy port is the usual cause, and any free
 `--port` works because the printed URL follows the port you passed.
 
+### Optional: check account connectivity and configure headless
+
+The `headless` profile is a separate, one-task command-line mode; it does not load
+this plugin's HTTP route. Its default configuration ignores saved desktop sign-ins.
+The Add WSL workspace dialog provides account controls **below the username field**;
+the `?` help panel is unchanged.
+
+1. Sign in through the desktop, and use the **same Windows `DSH_HOME`** for headless.
+   A scratch home or a WSL Linux home has a separate credential store.
+2. Press **Check account connection**. The plugin asks DSH's account service for a
+   fresh authenticated balance request (`deepseekAccount.getBalance`), without
+   running a model task. The indicator starts unchecked, shows progress, and turns
+   green only for a successful account-service response. A red result includes a
+   sign-in, service, connection or timeout message. Green does not prove that a
+   model inference request or a `subagent` call will succeed.
+3. Choose **For this launch** or **Remember settings**, then apply that choice:
+   - **Download launch settings** creates a credential-free `headless-account.patch.yml`
+     overlay. Load the
+     downloaded file for that invocation with
+     `dsh --profile headless --patch "<downloaded-overlay.yml>" -`. Existing defaults
+     stay in place. The final `-` waits for task text on stdin; pipe a task into it.
+   - **Save default settings** updates the same home's
+     `<DSH_HOME>/profiles/headless/cordis.patch.yml`, preserving unrelated rows and
+     configuration. Later headless launches use the saved account settings.
+   - **Restore previous settings**, when offered, restores only fields this plugin
+     manages. Conflicting external edits are reported instead of overwritten;
+     manually configured account defaults are not claimed by the plugin.
+
+These choices control how headless uses the existing account, not the login's
+lifetime. DSH keeps managing credentials and expiry; the plugin does not read or
+copy a token into the downloaded overlay or return account or balance details.
+
+For manual setup, the [official headless authentication guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/bundle/headless/README.md#credentials)
+uses the following overlay. Replace `deepseek-flash` with an available account model
+if needed:
+
+   ```yaml
+   - id: credentials
+     disabled: false
+   - id: authorization
+     disabled: false
+   - id: deepseek-account
+     disabled: false
+   - id: agent-default-model
+     config:
+       provider: deepseek-account
+       model: deepseek-flash
+   ```
+
+Pass the file for this invocation with
+`dsh --profile headless --patch "<overlay.yml>" -`. Use the CLI entry above if `dsh`
+is not on `PATH`.
+
+| Error | What to check |
+|---|---|
+| `MISSING_CREDENTIAL` on `deepseek-official` | The API-key route is selected. For desktop sign-in, select `deepseek-account` with the overlay above. |
+| `ACCOUNT_SIGN_IN_REQUIRED` | Restore all three authentication services, use the desktop's home, and confirm the desktop is signed in. This message can also mean the account service is disabled. |
+
+You do not need to copy a token or turn it into `DEEPSEEK_API_KEY`. The model endpoint
+must match the account's configured inference origin (official default:
+`https://api.deepseek.com`). Restoring authentication does not restore the
+`subagent`/workflow tools removed by the WSL compatibility workaround.
+
 ## 2. Log in: the printed URL and its token (measured: not consumed while that process lives)
 
 The CLI prints exactly one line on stdout:
@@ -107,7 +170,7 @@ The plugin's own route does **not** need that cookie — it is loopback-only ins
 | method | `POST` (anything else → `405 method not allowed`) |
 | path | `/wsl-workspace/api` by default; the profile can override it (`Config.route`) — read the real one from `describe` |
 | body | `{ "method": "<name>", "params": { … } }` (`params` must be an object → else `400`) |
-| response | `{ "ok": true, "value": … }` or `{ "ok": false, "error": "…" }` (validation errors come back as `200` with `ok:false`) |
+| response | `{ "ok": true, "value": … }` or `{ "ok": false, "error": "…", "code": "…" }` (`code` is optional; validation errors come back as `200` with `ok:false`) |
 | auth | none — **loopback only**: a non-loopback socket address or `Host` header gets `403 {"ok":false,"error":"loopback-only"}` |
 
 The path is **profile configuration** (`Config.route`), not a constant in the code. A
@@ -139,10 +202,19 @@ curl -s -X POST http://127.0.0.1:3981/wsl-workspace/api \
 `describe` returns `{ version, releases, route, loopbackOnly, methods, installProof, driving }`.
 `methods` is the authoritative table (`name`, `mutates`, `params`, `returns`); it is
 generated from the same constant the dispatcher reads, and a gate fails the build if the
-two disagree. The ten methods are:
+two disagree. The thirteen methods are:
 
 `listDistros`, `listDir`, `check`, `registerWindows`, `listWorkspaces`, `removeWorkspace`,
-`listWorkspaceRecords`, `setUser`, `variantStatus`, `describe`.
+`listWorkspaceRecords`, `setUser`, `variantStatus`, `describe`, `headlessAuthStatus`,
+`headlessAuthCheck`, `configureHeadlessAuth`.
+
+The three account methods require `Content-Type: application/json` as well as the
+same loopback fence. `headlessAuthStatus` reads saved preference and restoration
+availability, not connection health. `headlessAuthCheck` returns only a fresh
+account-service outcome. `configureHeadlessAuth` accepts only
+`{"scope":"once"}`, `{"scope":"permanent"}` or `{"scope":"reset"}`; the host chooses
+the profile path. `once` returns an overlay for download; the other scopes save or
+restore the managed settings. No account identity, balance or token is returned.
 
 Examples (read-only first):
 
@@ -271,7 +343,7 @@ appending a second row with the same id:
 - **Only new sessions pick it up.** A session created before the patch keeps the model it
   recorded; create a new one (or use the host's model picker) after editing the patch.
   Profile patches are read at startup, so restart the instance after editing before
-  creating that session. There is no model readout on this plugin's API — the
+  creating that session. This plugin does not inspect a running session's model — the
   confirmation is behavioural: a new session answers instead of ending every turn in
   `MISSING_CREDENTIAL` / 401.
 - The same shape works on a desktop profile (`<home>/profiles/desktop/cordis.patch.yml`);
