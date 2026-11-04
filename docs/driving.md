@@ -94,22 +94,20 @@ the `?` help panel is unchanged.
    green only for a successful account-service response. A red result includes a
    sign-in, service, connection or timeout message. Green does not prove that a
    model inference request or a `subagent` call will succeed.
-3. Choose **This launch** or **Remember**, then apply that choice:
-   - **Download** creates a credential-free `headless-account.patch.yml`
-     overlay. Load the
-     downloaded file for that invocation with
-     `dsh --profile headless --patch "<downloaded-overlay.yml>" -`. Existing defaults
-     stay in place. The final `-` waits for task text on stdin; pipe a task into it.
-   - **Save** updates the same home's
-     `<DSH_HOME>/profiles/headless/cordis.patch.yml`, preserving unrelated rows and
-     configuration. Later headless launches use the saved account settings.
-   - **Restore**, when offered, restores only fields this plugin
-     manages. Conflicting external edits are reported instead of overwritten;
-     manually configured account defaults are not claimed by the plugin.
+3. **Download** saves a credential-free `headless-account.patch.yml` overlay. Load it on
+   every headless launch with
+   `dsh --profile headless --patch "<downloaded-overlay.yml>" -`; existing defaults stay
+   in place. The final `-` waits for task text on stdin; pipe a task into it. The file is
+   reusable: it holds no token, only which services to enable and which account model to
+   use, so download it again only to change the model. A wrapper that always adds
+   `--patch` makes every launch use the account. The plugin never writes the headless
+   profile; to make the account the profile's own default, copy the rows into
+   `<DSH_HOME>/profiles/headless/cordis.patch.yml` yourself.
 
-These choices control how headless uses the existing account, not the login's
-lifetime. DSH keeps managing credentials and expiry; the plugin does not read or
-copy a token into the downloaded overlay or return account or balance details.
+The overlay controls how headless uses the existing account, not the login's
+lifetime. DSH keeps managing credentials and expiry: once the desktop sign-in lapses,
+headless reports `ACCOUNT_SIGN_IN_REQUIRED` until you sign in on the desktop again. The
+plugin does not read or copy a token into the overlay or return account or balance details.
 
 For manual setup, the [official headless authentication guide](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/bundle/headless/README.md#credentials)
 uses the following overlay. Replace `deepseek-flash` with an available account model
@@ -204,19 +202,17 @@ curl -s -X POST http://127.0.0.1:3981/wsl-workspace/api \
 `describe` returns `{ version, releases, route, loopbackOnly, methods, installProof, driving }`.
 `methods` is the authoritative table (`name`, `mutates`, `params`, `returns`); it is
 generated from the same constant the dispatcher reads, and a gate fails the build if the
-two disagree. The thirteen methods are:
+two disagree. The twelve methods are:
 
 `listDistros`, `listDir`, `check`, `registerWindows`, `listWorkspaces`, `removeWorkspace`,
-`listWorkspaceRecords`, `setUser`, `variantStatus`, `describe`, `headlessAuthStatus`,
-`headlessAuthCheck`, `configureHeadlessAuth`.
+`listWorkspaceRecords`, `setUser`, `variantStatus`, `describe`, `headlessAuthCheck`,
+`headlessAuthOverlay`.
 
-The three account methods require `Content-Type: application/json` as well as the
-same loopback fence. `headlessAuthStatus` reads saved preference and restoration
-availability, not connection health. `headlessAuthCheck` returns only a fresh
-account-service outcome. `configureHeadlessAuth` accepts only
-`{"scope":"once"}`, `{"scope":"permanent"}` or `{"scope":"reset"}`; the host chooses
-the profile path. `once` returns an overlay for download; the other scopes save or
-restore the managed settings. No account identity, balance or token is returned.
+The two account methods require `Content-Type: application/json` as well as the
+same loopback fence, and take no params. `headlessAuthCheck` returns only a fresh
+account-service outcome. `headlessAuthOverlay` returns `{ yaml, filename }`, the same
+launch overlay the dialog downloads, and writes nothing. No account identity, balance or
+token is returned.
 
 Examples (read-only first):
 

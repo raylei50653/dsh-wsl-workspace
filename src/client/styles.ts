@@ -412,31 +412,10 @@ const STYLES = `
 .dww-auth-status { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
 .dww-auth-status[data-state='connected'] { color: var(--dsw-alias-label-primary); }
 .dww-auth-check { height: 30px; }
-.dww-auth-scope { display: inline-flex; margin: 0; padding: 2px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; }
-.dww-auth-scope label {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-}
-.dww-auth-scope label:has(input:checked) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
-.dww-auth-scope label:has(input:focus-visible) { outline: 1px solid var(--dsw-alias-state-business-primary); }
-.dww-auth-scope input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; pointer-events: none; }
-.dww-auth-scope:disabled label { cursor: default; opacity: 0.6; }
-.dww-auth-actions { display: flex; align-items: center; gap: 12px; flex: none; }
-.dww-auth-apply { height: 30px; padding: 0 12px; font-size: 12px; }
-.dww-auth-reset { padding: 0; border: 0; background: transparent; font-size: 12px; color: var(--dsw-alias-label-tertiary); text-decoration: underline; cursor: pointer; }
-.dww-auth-reset:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
-.dww-auth-reset:disabled { cursor: default; opacity: 0.6; }
+.dww-auth-apply { flex: none; height: 30px; padding: 0 12px; font-size: 12px; }
 .dww-auth-note { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); overflow-wrap: anywhere; }
 .dww-auth-feedback[data-tone='success'] { color: var(--dsw-alias-state-success-primary); }
 .dww-auth-feedback[data-tone='error'] { color: var(--dsw-alias-state-error-primary); }
-.dww-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .dww-help-footer {
   display: flex;
   gap: 14px;

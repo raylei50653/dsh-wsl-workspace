@@ -388,9 +388,8 @@ const METHOD_TABLE: readonly MethodRow[] = [
   { name: 'listWorkspaceRecords', mutates: false, params: {}, returns: 'workspace records (path, distro, username)' },
   { name: 'setUser', mutates: true, params: { path: 'WSL UNC workspace', username: 'linux user, or "" to clear' }, returns: 'null' },
   { name: 'variantStatus', mutates: false, params: {}, returns: 'preset-variant registration outcome for this process' },
-  { name: 'headlessAuthStatus', mutates: false, params: {}, returns: 'saved headless account preference and restore availability' },
   { name: 'headlessAuthCheck', mutates: false, params: {}, returns: 'fresh account-service connection result; never credentials or balance' },
-  { name: 'configureHeadlessAuth', mutates: true, params: { scope: 'once | permanent | reset' }, returns: 'updated preference; once includes a credential-free launch overlay' },
+  { name: 'headlessAuthOverlay', mutates: false, params: {}, returns: '{ yaml, filename } — credential-free launch overlay for `--patch`; writes nothing' },
   { name: 'describe', mutates: false, params: {}, returns: 'this object' },
 ]
 
@@ -599,16 +598,11 @@ async function dispatch(method: string, params: Record<string, unknown>, headles
       // `{ok:false}`, which the client already falls back from.
       return variantOutcome
     }
-    case 'headlessAuthStatus': {
-      return headlessAuth.status()
-    }
     case 'headlessAuthCheck': {
       return headlessAuth.check()
     }
-    case 'configureHeadlessAuth': {
-      const scope = params.scope
-      if (scope !== 'once' && scope !== 'permanent' && scope !== 'reset') throw new Error('scope must be once, permanent, or reset')
-      return headlessAuth.configure(scope)
+    case 'headlessAuthOverlay': {
+      return headlessAuth.overlay()
     }
     default:
       throw new Error(`unknown method "${method}"`)
@@ -1218,7 +1212,6 @@ export function apply(ctx: Context, config: Config): void {
   servedRoute = resolved.route
   const dshHome = process.env.DSH_HOME ?? join(homedir(), '.dsh')
   const headlessAuth = createHeadlessAuth({
-    dshHome,
     account: () => ctx.get('deepseekAccount') as HeadlessAccount | undefined,
     selection: () => {
       const defaults = ctx.get('agentDefaultModel') as { currentSelection?: () => { provider: string; model: string } } | undefined
@@ -1473,7 +1466,7 @@ export function apply(ctx: Context, config: Config): void {
         return
       }
       const method = typeof body.method === 'string' ? body.method : ''
-      if (['headlessAuthStatus', 'headlessAuthCheck', 'configureHeadlessAuth'].includes(method)
+      if (['headlessAuthCheck', 'headlessAuthOverlay'].includes(method)
         && String(req.headers['content-type'] ?? '').split(';')[0]?.trim().toLowerCase() !== 'application/json') {
         json(res, 403, { ok: false, error: 'account settings require an application/json request' })
         return

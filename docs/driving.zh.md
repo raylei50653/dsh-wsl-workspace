@@ -73,17 +73,16 @@ Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
    DSH 账号服务发起一次新的已认证余额请求
    （`deepseekAccount.getBalance`），不会执行模型任务。指示器检查时显示进度，只有账号服务
    响应成功才亮绿灯；红灯会说明未登录、服务不可用、连接失败或超时。绿灯不代表模型推论或 `subagent` 已跑通。
-3. 选择「**仅本次**」或「**记住**」，再执行对应操作：
-   - 「**下载**」生成不含凭据的 `headless-account.patch.yml` 覆盖文件。用
-     `dsh --profile headless --patch "<下载的覆盖文件.yml>" -` 在当次启动中加载；现有默认设置仍保留。
-     末尾的 `-` 会等待 stdin 任务文本，可通过管道传入任务。
-   - 「**保存**」更新同一 home 的 `<DSH_HOME>/profiles/headless/cordis.patch.yml`，保留其他行与配置；
-     后续 headless 启动自动沿用账号设置。
-   - 「**还原**」出现时，只还原插件管理的字段。外部修改冲突时会报错，不覆盖那些修改；
-     用户原本手动设置的账号默认值不会被插件认领。
+3. 「**下载**」保存不含凭据的 `headless-account.patch.yml` 覆盖文件。每次启动 headless 时用
+   `dsh --profile headless --patch "<下载的覆盖文件.yml>" -` 加载；现有默认设置仍保留。末尾的 `-` 会等待
+   stdin 任务文本，可通过管道传入任务。文件可重复使用：里面没有 token，只写明启用哪些服务、用哪个账号
+   型号，只有想换型号时才需重新下载。用一个固定加上 `--patch` 的包装脚本，每次启动都会走账号登录。
+   插件不会写入 headless profile；若想让账号成为该 profile 的默认，请自行把这几行复制进
+   `<DSH_HOME>/profiles/headless/cordis.patch.yml`。
 
-这里选择的是 headless 如何使用现有账号，不是承诺登录永不过期。凭据与有效期仍由 DSH 管理；插件不会把
-token 读出、复制进下载文件，也不会向客户端返回账号或余额详情。
+覆盖文件决定的是 headless 如何使用现有账号，不是承诺登录永不过期。凭据与有效期仍由 DSH 管理：桌面版
+登录失效后，headless 会报 `ACCOUNT_SIGN_IN_REQUIRED`，需回桌面版重新登录。插件不会把 token 读出、复制进
+覆盖文件，也不会向客户端返回账号或余额详情。
 
 手动设置可参考[官方 headless 认证说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/bundle/headless/README.md#credentials)，
 使用下面的覆盖文件；如有需要，将 `deepseek-flash` 换成账号当前可用的型号：
@@ -164,16 +163,15 @@ curl -s -X POST http://127.0.0.1:3981/wsl-workspace/api \
 
 `describe` 回 `{ version, releases, route, loopbackOnly, methods, installProof, driving }`。
 `methods` 是权威表（`name`／`mutates`／`params`／`returns`），它与派发器读同一个常量；两者不一致时构建红。
-十三枚方法是：
+十二枚方法是：
 
 `listDistros`、`listDir`、`check`、`registerWindows`、`listWorkspaces`、`removeWorkspace`、
-`listWorkspaceRecords`、`setUser`、`variantStatus`、`describe`、`headlessAuthStatus`、
-`headlessAuthCheck`、`configureHeadlessAuth`。
+`listWorkspaceRecords`、`setUser`、`variantStatus`、`describe`、`headlessAuthCheck`、
+`headlessAuthOverlay`。
 
-三项账号方法除了同样的环回限制，还要求 `Content-Type: application/json`。`headlessAuthStatus` 读取已保存的
-偏好与可还原状态，不证明连接健康；`headlessAuthCheck` 只返回一次新的账号服务检查结果。
-`configureHeadlessAuth` 只接受 `{"scope":"once"}`、`{"scope":"permanent"}` 或 `{"scope":"reset"}`；profile 路径
-由宿主固定选择。`once` 返回供下载的覆盖设置，其余两项保存或还原受管设置。三项方法都不返回账号身份、余额或 token。
+两项账号方法除了同样的环回限制，还要求 `Content-Type: application/json`，且不接受参数。`headlessAuthCheck`
+只返回一次新的账号服务检查结果；`headlessAuthOverlay` 返回 `{ yaml, filename }`，即对话框下载的同一份启动
+覆盖文件，不写入任何文件。两项方法都不返回账号身份、余额或 token。
 
 先只读地打一发：
 

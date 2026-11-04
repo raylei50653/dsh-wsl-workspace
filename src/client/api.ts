@@ -264,37 +264,15 @@ export async function describe(): Promise<WslSelfDescription> {
   return call<WslSelfDescription>('describe', {})
 }
 
-/** Saved preferences are separate from the result of a network account check. */
-export interface HeadlessAuthState {
-  permanent: boolean
-  managed: boolean
-  canReset: boolean
-}
-
 export interface HeadlessAuthCheck {
   status: 'connected' | 'signed-out' | 'unavailable' | 'failed'
   reason?: string
 }
 
-export type HeadlessAuthScope = 'once' | 'permanent' | 'reset'
-
-export interface HeadlessAuthResult extends HeadlessAuthState {
-  scope: HeadlessAuthScope
-  yaml?: string
-  filename?: string
-}
-
-function authState(value: unknown): HeadlessAuthState {
-  if (value === null || typeof value !== 'object') throw new Error('invalid headless settings response')
-  const state = value as Partial<HeadlessAuthState>
-  if (typeof state.permanent !== 'boolean' || typeof state.managed !== 'boolean' || typeof state.canReset !== 'boolean') {
-    throw new Error('invalid headless settings response')
-  }
-  return state as HeadlessAuthState
-}
-
-export async function headlessAuthStatus(): Promise<HeadlessAuthState> {
-  return authState(await call<unknown>('headlessAuthStatus'))
+/** The credential-free launch overlay; the host writes nothing to produce it. */
+export interface HeadlessAuthOverlay {
+  yaml: string
+  filename: string
 }
 
 export async function headlessAuthCheck(): Promise<HeadlessAuthCheck> {
@@ -306,14 +284,14 @@ export async function headlessAuthCheck(): Promise<HeadlessAuthCheck> {
   return value as HeadlessAuthCheck
 }
 
-export async function configureHeadlessAuth(scope: HeadlessAuthScope): Promise<HeadlessAuthResult> {
-  const value = await call<unknown>('configureHeadlessAuth', { scope })
-  authState(value)
-  const result = value as HeadlessAuthResult
-  if (result.scope !== scope || (scope === 'once' && (typeof result.yaml !== 'string' || result.yaml.trim() === ''))) {
-    throw new Error('invalid account settings result')
+export async function headlessAuthOverlay(): Promise<HeadlessAuthOverlay> {
+  const value = await call<unknown>('headlessAuthOverlay')
+  const result = value as Partial<HeadlessAuthOverlay> | null
+  if (result === null || typeof result !== 'object' || typeof result.yaml !== 'string' || result.yaml.trim() === ''
+    || typeof result.filename !== 'string' || result.filename === '') {
+    throw new Error('invalid launch overlay result')
   }
-  return result
+  return result as HeadlessAuthOverlay
 }
 
 /** One variant this boot could not publish, with the cause the host recorded. */

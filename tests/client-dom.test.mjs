@@ -297,7 +297,6 @@ function healthy(overrides = {}) {
     listDistros: ['Ubuntu-24.04'],
     listDir: { path: '/', parent: null, entries: [{ name: 'home', kind: 'directory' }] },
     describe: { version: '0.7.8', releases: [] },
-    headlessAuthStatus: { permanent: false, managed: false, canReset: false },
     headlessAuthCheck: { status: 'connected' },
     ...overrides,
   }
@@ -502,7 +501,7 @@ test('opening the dialog checks the account once and the header pill turns green
     assert.equal(chip.dataset.state, 'connected', 'the header pill turns green with the check')
     assert.equal(notice.querySelector('.dww-auth-apply').disabled, false)
     assert.equal(client.calls.filter(name => name === 'headlessAuthCheck').length, 1, 'opening the popover must not send a second check')
-    assert.ok(!client.calls.includes('configureHeadlessAuth'), 'checking connectivity must not save preferences')
+    assert.ok(!client.calls.includes('headlessAuthOverlay'), 'checking connectivity must not fetch the overlay')
   } finally { await client.unmount() }
 })
 
@@ -524,8 +523,7 @@ for (const answer of [{ status: 'failed' }, { status: 'signed-out' }, { status: 
   })
 }
 
-test('one-launch setup downloads the returned overlay and does not claim it was saved', async () => {
-  let requestedScope
+test('Download hands over the host overlay as a file and offers nothing that writes settings', async () => {
   let downloadedBlob
   let downloadedName
   const originalCreate = URL.createObjectURL
@@ -535,19 +533,18 @@ test('one-launch setup downloads the returned overlay and does not claim it was 
   URL.revokeObjectURL = () => {}
   dom.window.HTMLAnchorElement.prototype.click = function () { downloadedName = this.download }
   const yaml = '- id: credentials\n  disabled: false\n'
-  const client = mount(healthy({ configureHeadlessAuth: ({ scope }) => {
-    requestedScope = scope
-    return { scope, yaml, filename: 'headless-account.patch.yml', permanent: false, managed: false, canReset: false }
-  } }))
+  const client = mount(healthy({ headlessAuthOverlay: { yaml, filename: 'headless-account.patch.yml' } }))
   try {
     await openAuth(client)
-    await client.click('.dww-auth-check')
+    const popover = client.container.querySelector('.dww-signin-notice')
+    assert.equal(popover.querySelectorAll('input, .dww-auth-reset').length, 0, 'no remember/restore controls remain')
+    assert.match(popover.textContent, /--patch/, 'the popover says how the file is used')
     await client.click('.dww-auth-apply')
-    assert.equal(requestedScope, 'once')
+    assert.equal(client.calls.filter(name => name === 'headlessAuthOverlay').length, 1)
     assert.equal(downloadedName, 'headless-account.patch.yml')
     assert.equal(await downloadedBlob.text(), yaml)
     assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /已下载/)
-    assert.equal(client.container.querySelector('.dww-auth-reset'), null)
+    assert.equal(client.container.querySelector('.dww-auth-feedback').dataset.tone, 'success')
   } finally {
     await client.unmount()
     URL.createObjectURL = originalCreate
@@ -556,40 +553,18 @@ test('one-launch setup downloads the returned overlay and does not claim it was 
   }
 })
 
-test('remember settings saves explicitly and can restore the previous configuration', async () => {
-  const scopes = []
-  const client = mount(healthy({ configureHeadlessAuth: ({ scope }) => {
-    scopes.push(scope)
-    return { scope, permanent: scope === 'permanent', managed: scope === 'permanent', canReset: scope === 'permanent' }
-  } }))
-  try {
-    await openAuth(client)
-    await client.click('.dww-auth-check')
-    await client.click('input[value="permanent"]')
-    await client.click('.dww-auth-apply')
-    assert.deepEqual(scopes, ['permanent'])
-    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /已保存/)
-    await client.click('.dww-auth-reset')
-    assert.deepEqual(scopes, ['permanent', 'reset'])
-    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /已还原/)
-    assert.equal(client.container.querySelector('input[value="once"]').checked, true)
-    assert.equal(client.container.querySelector('.dww-auth-reset'), null)
-  } finally { await client.unmount() }
-})
-
-test('conflicting or malformed settings results are not presented as saved', async () => {
-  const scenario = healthy({ configureHeadlessAuth: { failureCode: 'CONFIG_CONFLICT' } })
+test('a refused or malformed overlay is reported as a failed download, not a success', async () => {
+  const scenario = healthy({ headlessAuthOverlay: { failureCode: 'CONFIG_INVALID' } })
   const client = mount(scenario)
   try {
     await openAuth(client)
-    await client.click('.dww-auth-check')
-    await client.click('input[value="permanent"]')
     await client.click('.dww-auth-apply')
-    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /其他程序修改/)
-    scenario.configureHeadlessAuth = {}
+    const feedback = () => client.container.querySelector('.dww-auth-feedback')
+    assert.match(feedback().textContent, /下载失败/)
+    assert.equal(feedback().dataset.tone, 'error')
+    scenario.headlessAuthOverlay = {}
     await client.click('.dww-auth-apply')
-    assert.match(client.container.querySelector('.dww-auth-feedback').textContent, /设置未完成/)
-    assert.equal(client.container.querySelector('.dww-auth-reset'), null)
+    assert.match(feedback().textContent, /下载失败/, 'an overlay without yaml must not be handed over')
   } finally { await client.unmount() }
 })
 

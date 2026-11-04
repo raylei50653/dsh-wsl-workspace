@@ -290,16 +290,12 @@ try {
   assert(runtime?.version === manifest?.version,
     `describe reports package.json's version (runtime ${runtime?.version} vs manifest ${manifest?.version})`)
 
-  // Account setup crosses the same loopback/JSON route as the shipped dialog.
+  // The account check and launch overlay cross the same loopback/JSON route as the shipped dialog.
   const authHeaders = { 'content-type': 'application/json' }
   const headlessProfile = join(home, 'profiles', 'headless', 'cordis.patch.yml')
-  const authStatus = await post({ method: 'headlessAuthStatus' }, { headers: authHeaders })
-  assert(authStatus.envelope?.ok === true && authStatus.envelope.value.permanent === false,
-    'account status reports a preference, without claiming a connection check')
-  assert(accountCalls.length === 0, 'reading saved settings sends no account request')
-  const blockedAuthWrite = await post({ method: 'configureHeadlessAuth', params: { scope: 'permanent' } })
-  assert(blockedAuthWrite.status === 403 && !existsSync(headlessProfile),
-    'a form-compatible non-JSON account write is rejected before creating a profile')
+  const blockedOverlay = await post({ method: 'headlessAuthOverlay' })
+  assert(blockedOverlay.status === 403 && accountCalls.length === 0,
+    'a form-compatible non-JSON account request is rejected before it reaches the account service')
   const connected = await post({ method: 'headlessAuthCheck' }, { headers: authHeaders })
   assert(connected.envelope?.value?.status === 'connected' && accountCalls.length === 1,
     'the account check calls the account service and reports its fresh result')
@@ -309,22 +305,12 @@ try {
     'a previous success is not reused after the account service reports signed out')
   assert(!connected.text.includes('token') && !connected.text.includes('wallet'),
     'the account response exposes no credentials or balance')
-  const once = await post({ method: 'configureHeadlessAuth', params: { scope: 'once' } }, { headers: authHeaders })
-  assert(once.envelope?.value?.scope === 'once' && typeof once.envelope.value.yaml === 'string' && !existsSync(headlessProfile),
-    'one-launch setup returns an overlay without persisting a profile')
-  const permanent = await post({ method: 'configureHeadlessAuth', params: { scope: 'permanent' } }, { headers: authHeaders })
-  assert(permanent.envelope?.value?.permanent === true && existsSync(headlessProfile),
-    'explicit remember setup persists the headless preference')
-  const resetAuth = await post({ method: 'configureHeadlessAuth', params: { scope: 'reset' } }, { headers: authHeaders })
-  assert(resetAuth.envelope?.value?.permanent === false && !existsSync(headlessProfile),
-    'restore removes only the preference created by the plugin')
-  await post({ method: 'configureHeadlessAuth', params: { scope: 'permanent' } }, { headers: authHeaders })
-  const externalAuthEdit = '- id: credentials\n  disabled: true\n'
-  writeFileSync(headlessProfile, externalAuthEdit)
-  const authConflict = await post({ method: 'configureHeadlessAuth', params: { scope: 'reset' } }, { headers: authHeaders })
-  assert(authConflict.envelope?.ok === false && authConflict.envelope.code === 'CONFIG_CONFLICT'
-    && readFileSync(headlessProfile, 'utf8') === externalAuthEdit,
-    'account conflicts keep external edits and return a stable code through the route')
+  const overlay = await post({ method: 'headlessAuthOverlay' }, { headers: authHeaders })
+  assert(overlay.envelope?.ok === true && typeof overlay.envelope.value.yaml === 'string'
+    && overlay.envelope.value.filename === 'headless-account.patch.yml' && !existsSync(headlessProfile),
+    'the launch overlay is returned without writing anything under the headless profile')
+  assert(!overlay.text.includes('token') && accountCalls.length === 2,
+    'the overlay carries no credentials and sends no account request')
 
   // ── 7. the headers the code sets ────────────────────────────────────────
   for (const [label, answer] of [

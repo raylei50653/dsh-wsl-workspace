@@ -89,7 +89,6 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/dsh-atomic-write": "0.2.1-rc.2",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {
