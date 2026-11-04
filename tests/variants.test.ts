@@ -885,6 +885,49 @@ test('entry-list !!js expressions remain data during delegation detection', () =
   assert.ok(out.includes(source.trimEnd()), 'the source expression must remain verbatim')
 })
 
+/** The rows of a generated variant, parsed the way a strict reader would. */
+function variantRows(out: string): { id?: unknown; name?: unknown; config?: unknown }[] {
+  return loadYaml(out) as { id?: unknown; name?: unknown; config?: unknown }[]
+}
+
+test('dropping a group that defines an anchor a kept row aliases still yields a loadable variant', () => {
+  const source = `- id: delegation
+  name: cordis:group
+  group: true
+  config:
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config: &shared
+        maxDepth: 2
+        label: shared
+
+# kept row, aliasing the anchor defined inside the dropped group
+- id: keeper
+  name: example-plugin
+  config: *shared
+`
+  const out = transformPresetForWsl(source, SHELL, FS, undefined, undefined, undefined, undefined, { dropSubagentDelegation: true })
+  const rows = variantRows(out)
+  assert.ok(!out.includes('dsh-tool-subagent'), 'the delegation group survived')
+  const keeper = rows.find(row => row.id === 'keeper')
+  assert.deepEqual(keeper?.config, { maxDepth: 2, label: 'shared' }, 'the kept row lost the value its alias pointed at')
+})
+
+for (const [label, row] of [
+  ['a double-quoted id', `- id: "tool-subagent"\n  name: '@deepseek-ai/dsh-tool-subagent'\n`],
+  ['a single-quoted id', `- id: 'tool-subagent'\n  name: '@deepseek-ai/dsh-tool-subagent'\n`],
+  ['an id after the name', `- name: '@deepseek-ai/dsh-tool-subagent'\n  id: tool-subagent\n`],
+  ['an id with a trailing comment', `- id: tool-subagent # delegation\n  name: '@deepseek-ai/dsh-tool-subagent'\n`],
+] as const) {
+  test(`a delegation row written with ${label} is still dropped`, () => {
+    const keeper = `- id: keeper\n  name: example-plugin\n  config: {}\n`
+    const out = transformPresetForWsl(`${keeper}\n${row}`, SHELL, FS, undefined, undefined, undefined, undefined, { dropSubagentDelegation: true })
+    assert.ok(!out.includes('dsh-tool-subagent'), 'the delegation row was copied through')
+    assert.ok(out.includes(keeper.trimEnd()), 'the neighbouring row must stay verbatim')
+    assert.ok(variantRows(out).some(entry => entry.id === 'keeper'))
+  })
+}
+
 test('hostLacksSubagentGate covers the current compat window and fails closed', () => {
   assert.equal(hostLacksSubagentGate('0.2.0-rc.1'), true)
   assert.equal(hostLacksSubagentGate('0.2.1-rc.2'), true)
